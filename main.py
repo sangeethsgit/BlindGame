@@ -2,6 +2,11 @@ import pygame
 import os
 import time
 import queue
+import sys
+
+# Add the project's root directory to the Python path
+# This ensures that subfolders like 'memory_tiles' and 'game2' are found.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Imports for the games themselves are moved into the main loop
 # to prevent loading them until they are selected.
@@ -51,6 +56,17 @@ def main():
     if not speech_sounds:
         return # Exit if speech files are missing
 
+    # --- Load Logo ---
+    logo_surf = None
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(script_dir, "logo", "logo.jpg")
+        logo_img = pygame.image.load(logo_path)
+        # Resize the logo to a reasonable size
+        logo_surf = pygame.transform.scale(logo_img, (150, 150))
+    except pygame.error as e:
+        print(f"Warning: Could not load logo.jpg from 'logo' folder: {e}")
+
     speech_queue = queue.Queue()
 
     def say(text):
@@ -83,7 +99,6 @@ def main():
                 if event.key == pygame.K_1:
                     print("Starting Memory Game...")
                     try:
-                        # Corrected import statement
                         from memory_tiles.memory_tiles import MemoryGame
                         game = MemoryGame(screen, speech_sounds)
                         game.run()
@@ -100,7 +115,6 @@ def main():
                 if event.key == pygame.K_2:
                     print("Starting Daily Routine Game...")
                     try:
-                        # Import the game only when it's selected
                         from game2.daily_routine_game import DailyRoutineGame
                         game = DailyRoutineGame(screen)
                         game.run()
@@ -116,14 +130,31 @@ def main():
 
         # --- Drawing ---
         screen.fill(COLOR_BG)
-        title_surf = title_font.render("Game Launcher", True, COLOR_TITLE)
-        screen.blit(title_surf, (WIDTH/2 - title_surf.get_width()/2, 100))
+        
+        # Blit the logo if it was loaded successfully
+        if logo_surf:
+            logo_rect = logo_surf.get_rect(center=(WIDTH / 2, 100))
+            screen.blit(logo_surf, logo_rect)
+            # Adjust title position to be below the logo
+            title_surf = title_font.render("Game Launcher", True, COLOR_TITLE)
+            screen.blit(title_surf, (WIDTH/2 - title_surf.get_width()/2, 200))
+            
+            # Adjust option positions
+            option1_y = 320
+            option2_y = 420
+        else:
+            # If no logo, draw title at original position
+            title_surf = title_font.render("Game Launcher", True, COLOR_TITLE)
+            screen.blit(title_surf, (WIDTH/2 - title_surf.get_width()/2, 100))
+            # Original option positions
+            option1_y = 250
+            option2_y = 350
 
         option1_surf = option_font.render("1: Audio Memory Tiles", True, COLOR_TEXT)
-        screen.blit(option1_surf, (WIDTH/2 - option1_surf.get_width()/2, 250))
+        screen.blit(option1_surf, (WIDTH/2 - option1_surf.get_width()/2, option1_y))
         
         option2_surf = option_font.render("2: Daily Routine Adventure", True, COLOR_TEXT)
-        screen.blit(option2_surf, (WIDTH/2 - option2_surf.get_width()/2, 350))
+        screen.blit(option2_surf, (WIDTH/2 - option2_surf.get_width()/2, option2_y))
 
         pygame.display.flip()
         clock.tick(30)

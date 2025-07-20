@@ -5,42 +5,58 @@ import os
 OUTPUT_FOLDER = "speech"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# List of texts you want to generate as speech files
+# This list contains every unique phrase used in main.py and memory_game.py
 phrases = [
+    # --- Menu phrases from main.py ---
+    "Welcome to the Games Portal",
+    "Please select a game",
+    "Press 1 for Audio Memory Tiles",
+    "Press 2 for Daily Routine Adventure",
+    "Press Escape to quit",
+    "Error starting game.",
+    "Error starting game. Please check model files and dependencies.",
+
+    # --- Memory Game phrases ---
     "Welcome to Audio Memory Tiles",
+    "Let's begin",
     "Use 1 to 4, Q to R, etc.",
+    "Use 1 to 4, Q to R, A to F, etc.",
+    "Press I at any time to hear the current score",
+    "Press the Spacebar to stop the current sound",
     "It's a match!",
     "Try again",
     "Score",
     "of",
-    "You won!",
-    "You lost!",
-    "Press space to replay",
-    "Let's begin",
+    "Congratulations! You found all the pairs. You win!",
+    "Your first choice was a",
+    "That tile is already matched. Try another.",
+    "You picked the same tile again. Choose a different one.",
+    "Goodbye"
 ]
 
-
-tile_keys = [str(i) for i in range(1, 5)] + ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V"]
-
-
-scores = [f"Score {i}" for i in range(0, 9)]
-ofs = [f"of {i}" for i in range(1, 9)]
+# Keys and numbers for the memory game
+tile_keys_and_numbers = [str(i) for i in range(0, 10)] + ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V"]
 
 # Combine all text
-all_phrases = phrases + tile_keys + scores + ofs
+all_phrases = phrases + tile_keys_and_numbers
 
 # Initialize pyttsx3
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)  # Speaking rate
+engine = pyttsx3.init(driverName='sapi5')
+engine.setProperty('rate', 170)
 
-def sanitize(text):
-    return text.lower().replace(" ", "").replace(":", "").replace("!", "").replace("'", "")
+def sanitize_filename(text):
+    """
+    This function MUST be identical to the one in main.py and memory_game.py
+    It sanitizes text to create a valid filename.
+    """
+    return text.lower().replace(" ", "").replace(":", "").replace("!", "").replace("'", "").replace(".", "").replace(",", "")
 
+print(f"--- Generating speech files in '{OUTPUT_FOLDER}' folder ---")
 for phrase in all_phrases:
-    filename = sanitize(phrase) + ".wav"
+    filename = sanitize_filename(phrase) + ".wav"
     filepath = os.path.join(OUTPUT_FOLDER, filename)
     print(f"Generating: {filepath}")
     engine.save_to_file(phrase, filepath)
 
 engine.runAndWait()
-print("✅ All speech files generated in 'speech/' folder.")
+print(f"✅ All speech files generated successfully.")

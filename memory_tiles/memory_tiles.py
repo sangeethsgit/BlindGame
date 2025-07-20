@@ -107,8 +107,9 @@ class MemoryGame:
     def introduce_game(self):
         self.draw_board()
         self.say("Welcome to Audio Memory Tiles")
+        self.say("Use 1 to 4, Q to R, A to  F, etc.")
         self.say("Let's begin")
-        self.say("Use 1 to 4, Q to R, etc.")
+        
         self.say("Press I at any time to hear the current score")
         self.say("Press the Spacebar to stop the current sound")
         self.say("Press Escape at any time to quit")
