@@ -1,208 +1,134 @@
 import pygame
-import sounddevice as sd
-from vosk import Model, KaldiRecognizer
-import queue
-import json
 import os
-import threading
 import time
+import queue
 
-# ------------ Setup Vosk Model ----------------
-if not os.path.exists("model"):
-    print("Please download a model from https://alphacephei.com/vosk/models and unzip into 'model'")
-    exit(1)
+# Imports for the games themselves are moved into the main loop
+# to prevent loading them until they are selected.
 
-model = Model("model")
-recognizer = KaldiRecognizer(model, 16000)
-q = queue.Queue()
+# --- Constants ---
+WIDTH, HEIGHT = 800, 600
+COLOR_BG = (20, 20, 40)
+COLOR_TITLE = (255, 255, 255)
+COLOR_TEXT = (200, 200, 220)
 
-def audio_callback(indata, frames, time, status):
-    q.put(bytes(indata))
+def sanitize_filename(text):
+    return text.lower().replace(" ", "").replace(":", "").replace("!", "").replace("'", "")
 
-def listen():
-    with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16',
-                           channels=1, callback=audio_callback):
-        while True:
-            data = q.get()
-            if recognizer.AcceptWaveform(data):
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "").lower()
-                if text:
-                    print("Heard:", text)
-                    handle_command(text)
+def load_speech_files():
+    """Loads all pre-generated speech files from the 'speech' folder."""
+    speech = {}
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    speech_dir = os.path.join(script_dir, "speech")
+    print(f"--- Loading All Speech from 'speech' ---")
+    if not os.path.isdir(speech_dir):
+        print("FATAL: 'speech' directory not found. Please run generate_speech.py first.")
+        return None
+    for filename in os.listdir(speech_dir):
+        if filename.endswith(".wav") or filename.endswith(".mp3"):
+            key = os.path.splitext(filename)[0]
+            try:
+                speech[key] = pygame.mixer.Sound(os.path.join(speech_dir, filename))
+            except pygame.error as e:
+                print(f"  - Error loading speech '{filename}': {e}")
+    print("------------------------------------")
+    return speech
 
-# ------------ Pygame Setup ---------------------
-pygame.init()
-pygame.mixer.init()
-WIDTH, HEIGHT = 700, 480
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Daily Routine Game")
-FONT = pygame.font.SysFont(None, 36)
-clock = pygame.time.Clock()
+def main():
+    """Main function to run the game launcher menu."""
+    pygame.mixer.pre_init(44100, -16, 2, 512)
+    pygame.init()
+    pygame.mixer.set_num_channels(2) # 0 for effects, 1 for speech
+    speech_channel = pygame.mixer.Channel(1)
 
-# ------------ Game Levels -----------------------
-levels = [
-    {
-        "prompt": "Say 'wake up' or 'sleep more'",
-        "correct": "wake up",
-        "success": "Good morning! You woke up on time.",
-        "fail": "You can't sleep more. Let's wake up now.",
-    },
-    {
-        "prompt": "Say 'brush' or 'play'",
-        "correct": "brush",
-        "success": "Nice! Brushing keeps teeth healthy.",
-        "fail": "No play now. First, let's brush.",
-    },
-    {
-        "prompt": "Say 'bath' or 'mobile'",
-        "correct": "bath",
-        "success": "Refreshing! Bath time it is.",
-        "fail": "No mobile now. Take a bath.",
-    },
-    {
-        "prompt": "Say 'uniform' or 'pajamas'",
-        "correct": "uniform",
-        "success": "Perfect! Let's wear the uniform.",
-        "fail": "No pajamas now. Wear uniform.",
-    },
-    {
-        "prompt": "Say 'breakfast' or 'chips'",
-        "correct": "breakfast",
-        "success": "Healthy breakfast! Well done.",
-        "fail": "Not chips now. Have breakfast.",
-    },
-    {
-        "prompt": "Say 'school bag' or 'video game'",
-        "correct": "school bag",
-        "success": "Great! Packing the school bag.",
-        "fail": "No video games now. Pick school bag.",
-    },
-    {
-        "prompt": "Say 'bus stop' or 'TV'",
-        "correct": "bus stop",
-        "success": "Smart! Heading to bus stop.",
-        "fail": "No TV now. Go to bus stop.",
-    },
-    {
-        "prompt": "Say 'greet teacher' or 'run'",
-        "correct": "greet teacher",
-        "success": "Nice manners! Greeted the teacher.",
-        "fail": "No running. Greet your teacher.",
-    },
-    {
-        "prompt": "Say 'attend class' or 'sleep'",
-        "correct": "attend class",
-        "success": "Focused! Attending class now.",
-        "fail": "No sleeping. Attend your class.",
-    },
-    {
-        "prompt": "Say 'lunch' or 'candy'",
-        "correct": "lunch",
-        "success": "Healthy lunch time!",
-        "fail": "No candy now. Have lunch.",
-    },
-    {
-        "prompt": "Say 'playground' or 'canteen'",
-        "correct": "playground",
-        "success": "Great! Recess fun in playground.",
-        "fail": "No canteen today. Let's play.",
-    },
-    {
-        "prompt": "Say 'say bye' or 'throw bag'",
-        "correct": "say bye",
-        "success": "Polite! You said bye to friends.",
-        "fail": "Don't throw bag! Say bye nicely.",
-    },
-    {
-        "prompt": "Say 'homework' or 'cartoon'",
-        "correct": "homework",
-        "success": "Responsible! Starting homework.",
-        "fail": "No cartoon now. Do homework.",
-    },
-    {
-        "prompt": "Say 'dinner' or 'ice cream'",
-        "correct": "dinner",
-        "success": "Yum! Time for dinner.",
-        "fail": "No ice cream now. Have dinner.",
-    },
-    {
-        "prompt": "Say 'sleep' or 'mobile'",
-        "correct": "sleep",
-        "success": "Good night! Sweet dreams.",
-        "fail": "No mobile now. Time to sleep.",
-    }
-]
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Game Launcher")
+    title_font = pygame.font.SysFont("helvetica", 72)
+    option_font = pygame.font.SysFont("helvetica", 48)
+    clock = pygame.time.Clock()
 
-# ------------ Audio Handling ---------------------
-def load_sound(file):
-    return pygame.mixer.Sound(file)
+    speech_sounds = load_speech_files()
+    if not speech_sounds:
+        return # Exit if speech files are missing
 
-def play_audio(level_index, category):  # category: prompt/success/fail
-    filename = f"voice_lines/{category}_level{level_index}.ogg"
-    if os.path.exists(filename):
-        pygame.mixer.stop()  # Stop other sounds
-        sound = load_sound(filename)
-        sound.play()
-        while pygame.mixer.get_busy():
-            pygame.time.wait(100)  # Wait for the sound to finish
+    speech_queue = queue.Queue()
 
-# ------------ Game State ------------------------
-current_text = "Welcome!"
-current_level = 0
-level_done = False
-
-def handle_command(cmd):
-    global current_level, current_text, level_done
-    level = levels[current_level]
-    if level["correct"] in cmd:
-        current_text = level["success"]
-        play_audio(current_level, "success")
-    else:
-        current_text = level["fail"]
-        play_audio(current_level, "fail")
-    
-    level_done = True
-
-# ------------ Start Listening Thread ------------
-listen_thread = threading.Thread(target=listen, daemon=True)
-listen_thread.start()
-
-# ------------ Main Loop -------------------------
-running = True
-wait_time = 3
-last_transition = time.time()
-
-while running:
-    screen.fill((0, 0, 50))
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # Display prompt or result
-    display_text = levels[current_level]["prompt"] if not level_done else current_text
-    text_surface = FONT.render(display_text, True, (255, 255, 255))
-    screen.blit(text_surface, (WIDTH // 2 - text_surface.get_width() // 2, HEIGHT // 2))
-
-    pygame.display.flip()
-    clock.tick(30)
-
-    # Play prompt audio once per level
-    if level_done is False:
-        play_audio(current_level, "prompt")
-        level_done = None
-
-    # Wait before moving to next level
-    if level_done and (time.time() - last_transition > wait_time):
-        current_level += 1
-        if current_level >= len(levels):
-            current_text = "Game Over! You did great."
-            print(current_text)
-            running = False
+    def say(text):
+        sanitized_key = sanitize_filename(text)
+        if sanitized_key in speech_sounds:
+            speech_queue.put(speech_sounds[sanitized_key])
         else:
-            current_text = ""
-            level_done = False
-            last_transition = time.time()
+            print(f"Menu Warning: Speech sound not found for key: '{sanitized_key}'")
 
-pygame.quit()
+    # --- Announce Menu ---
+    say("Welcome to the Games Portal")
+    say("Please select a game")
+    say("Press 1 for Audio Memory Tiles")
+    say("Press 2 for Daily Routine Adventure")
+    say("Press Escape to quit")
+
+    running = True
+    while running:
+        # --- Speech Playback ---
+        if not speech_channel.get_busy() and not speech_queue.empty():
+            speech_channel.play(speech_queue.get())
+
+        # --- Event Handling ---
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                if event.key == pygame.K_1:
+                    print("Starting Memory Game...")
+                    try:
+                        # Corrected import statement
+                        from memory_tiles.memory_tiles import MemoryGame
+                        game = MemoryGame(screen, speech_sounds)
+                        game.run()
+                    except ImportError as e:
+                        print(f"Could not start Memory Game. Error: {e}")
+                        say("Error starting game.")
+                    
+                    # After game finishes, re-announce menu
+                    say("Please select a game")
+                    say("Press 1 for Audio Memory Tiles")
+                    say("Press 2 for Daily Routine Adventure")
+                    say("Press Escape to quit")
+
+                if event.key == pygame.K_2:
+                    print("Starting Daily Routine Game...")
+                    try:
+                        # Import the game only when it's selected
+                        from game2.daily_routine_game import DailyRoutineGame
+                        game = DailyRoutineGame(screen)
+                        game.run()
+                    except (ImportError, FileNotFoundError) as e:
+                        print(f"Could not start Daily Routine Game. Error: {e}")
+                        say("Error starting game. Please check model files and dependencies.")
+                    
+                    # After game finishes, re-announce menu
+                    say("Please select a game")
+                    say("Press 1 for Audio Memory Tiles")
+                    say("Press 2 for Daily Routine Adventure")
+                    say("Press Escape to quit")
+
+        # --- Drawing ---
+        screen.fill(COLOR_BG)
+        title_surf = title_font.render("Game Launcher", True, COLOR_TITLE)
+        screen.blit(title_surf, (WIDTH/2 - title_surf.get_width()/2, 100))
+
+        option1_surf = option_font.render("1: Audio Memory Tiles", True, COLOR_TEXT)
+        screen.blit(option1_surf, (WIDTH/2 - option1_surf.get_width()/2, 250))
+        
+        option2_surf = option_font.render("2: Daily Routine Adventure", True, COLOR_TEXT)
+        screen.blit(option2_surf, (WIDTH/2 - option2_surf.get_width()/2, 350))
+
+        pygame.display.flip()
+        clock.tick(30)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
